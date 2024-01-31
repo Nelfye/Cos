@@ -32,25 +32,13 @@ client.on("ready", async () => {
 
 const commandsList = [
     {
-        name: "help",
-        description: "Affiche la liste des commandes",
-        handle: (interaction) => {
-            const commandsDescription = commandsList.map(command => `**${command.name}**: ${command.description}`).join("\n");
-            const embed = {
-                title: "Liste des commandes",
-                description: commandsDescription
-            };
-            interaction.reply({ content: "", embeds: [embed], ephemeral: true });
-        },
-    },
-    {
         name: "play",
-        description: "Recherche et joue une musique par titre ou utilise un lien YouTube",
+        description: "Gère la lecture de musique",
         handle: async (interaction) => {
-            const titreOrUrl = interaction.options.getString("titre_or_url");
+            const action = interaction.options.getString("action");
 
-            if (!titreOrUrl) {
-                return interaction.reply("Veuillez fournir un titre de musique à rechercher ou un lien YouTube.");
+            if (!action) {
+                return interaction.reply("Veuillez spécifier une action, par exemple, `play`, `stop`, ou `skip`.");
             }
 
             const channel = interaction.member.voice.channel;
@@ -65,110 +53,62 @@ const commandsList = [
                 adapterCreator: channel.guild.voiceAdapterCreator,
             });
 
-            let url, title;
+            if (action === "play") {
+                const titreOrUrl = interaction.options.getString("titre_or_url");
 
-            if (ytdl.validateURL(titreOrUrl)) {
-                url = titreOrUrl;
-                const info = await ytdl.getInfo(url);
-                title = info.videoDetails.title;
-            } else {
-                const searchResults = await ytsr(titreOrUrl, { limit: 1 });
-
-                if (searchResults.items.length === 0) {
-                    return interaction.reply("Aucun résultat trouvé pour la recherche.");
+                if (!titreOrUrl) {
+                    return interaction.reply("Veuillez fournir un titre de musique à rechercher ou un lien YouTube.");
                 }
 
-                const firstResult = searchResults.items[0];
-                url = firstResult.url;
-                title = firstResult.title;
+                let url, title;
+
+                if (ytdl.validateURL(titreOrUrl)) {
+                    url = titreOrUrl;
+                    const info = await ytdl.getInfo(url);
+                    title = info.videoDetails.title;
+                } else {
+                    const searchResults = await ytsr(titreOrUrl, { limit: 1 });
+
+                    if (searchResults.items.length === 0) {
+                        return interaction.reply("Aucun résultat trouvé pour la recherche.");
+                    }
+
+                    const firstResult = searchResults.items[0];
+                    url = firstResult.url;
+                    title = firstResult.title;
+                }
+
+                const stream = ytdl(url, { filter: 'audioonly' });
+                const resource = createAudioResource(stream, { inputType: StreamType.Arbitrary });
+
+                const player = createAudioPlayer();
+                player.play(resource);
+                connection.subscribe(player);
+
+                interaction.reply("Musique en cours de lecture.");
+            } else if (action === "stop") {
+                // Code pour arrêter la lecture de musique
+                // ...
+            } else if (action === "skip") {
+                // Code pour passer à la musique suivante
+                // ...
+            } else {
+                return interaction.reply("Action non valide. Veuillez spécifier `play`, `stop`, ou `skip`.");
             }
-
-            const stream = ytdl(url, { filter: 'audioonly' });
-            const resource = createAudioResource(stream, { inputType: StreamType.Arbitrary });
-
-            const player = createAudioPlayer();
-            player.play(resource);
-            connection.subscribe(player);
-
-            interaction.reply("Musique en cours de lecture.");
         },
         options: [
+            {
+                name: "action",
+                description: "Action à effectuer (`play`, `stop`, ou `skip`)",
+                type: 3,
+                required: true,
+            },
             {
                 name: "titre_or_url",
-                description: "Titre de la musique à rechercher ou lien YouTube",
+                description: "Titre de la musique à rechercher ou lien YouTube (utilisé avec l'action `play`)",
                 type: 3,
-                required: true,
+                required: false,
             },
         ],
-    },
-    {
-        name: "playlink",
-        description: "Joue de la musique à partir d'un lien YouTube",
-        handle: async (interaction) => {
-            const input = interaction.options.getString("url");
-            if (!input) {
-                return interaction.reply("Veuillez fournir une URL YouTube valide ou le nom de la vidéo.");
-            }
-
-            const channel = interaction.member.voice.channel;
-            if (!channel) {
-                return interaction.reply("Vous devez être dans un salon vocal pour utiliser cette commande.");
-            }
-
-            const connection = joinVoiceChannel({
-                channelId: channel.id,
-                guildId: channel.guild.id,
-                adapterCreator: channel.guild.voiceAdapterCreator,
-            });
-
-            let url;
-            let videoID;
-            try {
-                videoID = ytdl.getURLVideoID(input);
-                url = `https://www.youtube.com/watch?v=${videoID}`;
-            } catch (error) {
-                return interaction.reply("Impossible de récupérer l'URL YouTube à partir de l'entrée fournie.");
-            }
-
-            const stream = ytdl(url, { filter: 'audioonly' });
-            const resource = createAudioResource(stream, { inputType: StreamType.Arbitrary });
-
-            const player = createAudioPlayer();
-            player.play(resource);
-            connection.subscribe(player);
-
-            interaction.reply("Musique en cours de lecture.");
-        },
-        options: [
-            {
-                name: "url",
-                description: "URL YouTube ou nom de la vidéo",
-                type: 3,
-                required: true,
-            },
-        ],
-    },
-    {
-        name: "skip",
-        description: "Passe à la musique suivante dans la playlist",
-        handle: async (interaction) => {
-
-        },
-    },
-    {
-        name: "stop",
-        description: "Arrête la lecture de musique",
-        handle: (interaction) => {
-
-        },
     },
 ];
-
-client.on("interactionCreate", (interaction) => {
-    if (!interaction.isCommand()) return;
-
-    const command = commandsList.find(cmd => cmd.name === interaction.commandName);
-    if (command) {
-        command.handle(interaction);
-    }
-});
