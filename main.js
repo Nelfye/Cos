@@ -20,13 +20,14 @@ client.on("ready", async () => {
     commandsList.forEach(command => {
         console.log(`Commande enregistrée : ${command.name}`);
     });
-        client.user.setPresence({
-            activities: [{
-                name: "online",
-                type: Discord.ActivityType.Listening
-            }],
-            status: "dnd"
-        });
+    
+    client.user.setPresence({
+        activities: [{
+            name: "online",
+            type: Discord.ActivityType.Listening
+        }],
+        status: "dnd"
+    });
 });
 
 const commandsList = [
@@ -44,14 +45,16 @@ const commandsList = [
     },
     {
         name: "play",
-        description: "Recherche et joue une musique par titre",
+        description: "Recherche et joue une musique par titre ou utilise un lien YouTube",
         handle: async (interaction) => {
-            const titre = interaction.options.getString("titre");
-            if (!titre) {
-                return interaction.reply("Veuillez fournir un titre de musique à rechercher.");
+            const titreOrUrl = interaction.options.getString("titre_or_url");
+
+            if (!titreOrUrl) {
+                return interaction.reply("Veuillez fournir un titre de musique à rechercher ou un lien YouTube.");
             }
 
             const channel = interaction.member.voice.channel;
+
             if (!channel) {
                 return interaction.reply("Vous devez être dans un salon vocal pour utiliser cette commande.");
             }
@@ -62,22 +65,24 @@ const commandsList = [
                 adapterCreator: channel.guild.voiceAdapterCreator,
             });
 
-            const searchResults = await ytsr(titre, { limit: 1 });
-            if (searchResults.items.length === 0) {
-                return interaction.reply("Aucun résultat trouvé pour la recherche.");
+            let url, title;
+
+            if (ytdl.validateURL(titreOrUrl)) {
+                url = titreOrUrl;
+                const info = await ytdl.getInfo(url);
+                title = info.videoDetails.title;
+            } else {
+                const searchResults = await ytsr(titreOrUrl, { limit: 1 });
+
+                if (searchResults.items.length === 0) {
+                    return interaction.reply("Aucun résultat trouvé pour la recherche.");
+                }
+
+                const firstResult = searchResults.items[0];
+                url = firstResult.url;
+                title = firstResult.title;
             }
 
-            const firstResult = searchResults.items[0];
-            const url = firstResult.url;
-            const videoID = firstResult.id;
-            const title = firstResult.title;
-            client.user.setPresence({
-                activities: [{
-                    name: title,
-                    type: Discord.ActivityType.Listening
-                }],
-                status: "idle"
-            });
             const stream = ytdl(url, { filter: 'audioonly' });
             const resource = createAudioResource(stream, { inputType: StreamType.Arbitrary });
 
@@ -85,30 +90,20 @@ const commandsList = [
             player.play(resource);
             connection.subscribe(player);
 
-            const videoimage = `https://img.youtube.com/vi/${videoID}/maxresdefault.jpg`;
-
-            const embed = {
-                title: "Musique en cours de lecture",
-                description: `**Titre**: ${title}\n**Lien**: ${url}\n`,
-                image: {
-                    url: videoimage,
-                },
-            };
-
-            interaction.reply({ content: "", embeds: [embed], ephemeral: false });
+            interaction.reply("Musique en cours de lecture.");
         },
         options: [
             {
-                name: "titre",
-                description: "Titre de la musique à rechercher",
+                name: "titre_or_url",
+                description: "Titre de la musique à rechercher ou lien YouTube",
                 type: 3,
                 required: true,
             },
         ],
     },
     {
-        name: "play",
-        description: "Joue de la musique",
+        name: "playlink",
+        description: "Joue de la musique à partir d'un lien YouTube",
         handle: async (interaction) => {
             const input = interaction.options.getString("url");
             if (!input) {
@@ -144,7 +139,6 @@ const commandsList = [
 
             interaction.reply("Musique en cours de lecture.");
         },
-        
         options: [
             {
                 name: "url",
@@ -154,15 +148,13 @@ const commandsList = [
             },
         ],
     },
-    
     {
-    name: "skip",
-    description: "Passe à la musique suivante dans la playlist",
-    handle: async (interaction) => {
+        name: "skip",
+        description: "Passe à la musique suivante dans la playlist",
+        handle: async (interaction) => {
 
+        },
     },
-},
-
     {
         name: "stop",
         description: "Arrête la lecture de musique",
